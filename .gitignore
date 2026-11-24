@@ -1,0 +1,8 @@
+.DS_Store
+.keystore/
+build/
+.wrangler/
+**/.wrangler/
+*.apk
+*.idsig
+node_modules/

@@ -1,0 +1,447 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#0b0b0f">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>TheCatGame</title>
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32.png">
+<link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="TheCatGame">
+<style>
+  :root {
+    --bg: #0b0b0f;
+    --panel: #16161d;
+    --panel-2: #1f1f28;
+    --line: #2a2a35;
+    --text: #ececf1;
+    --muted: #8b8b98;
+    --accent: #ff2d55;
+    --ok: #34c759;
+    --bad: #ff453a;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body {
+    margin: 0; height: 100%; background: var(--bg); color: var(--text);
+    font: 15px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    overscroll-behavior: none;
+  }
+  body { display: flex; flex-direction: column; min-height: 100dvh; }
+  header {
+    display: flex; align-items: center; gap: 10px;
+    padding: max(10px, env(safe-area-inset-top)) 16px 10px;
+  }
+  header h1 { font-size: 16px; font-weight: 700; margin: 0; flex: 1; display: flex; align-items: center; gap: 8px; }
+  header .logo { width: 26px; height: 26px; border-radius: 7px; }
+  .status { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--muted); }
+  .status i { width: 8px; height: 8px; border-radius: 50%; background: var(--bad); display: inline-block; }
+  .status.on i { background: var(--ok); }
+
+  main {
+    flex: 1; display: grid; gap: 16px; padding: 0 16px 16px;
+    grid-template-columns: 1fr; align-content: start;
+  }
+  @media (min-width: 900px) {
+    main { grid-template-columns: 1fr 300px; align-items: start; }
+  }
+
+  .pad-wrap { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+  .pad {
+    position: relative; width: 100%; aspect-ratio: 16 / 9;
+    background: #000; border: 1px solid var(--line); border-radius: 14px;
+    touch-action: none; user-select: none; -webkit-user-select: none;
+    overflow: hidden; cursor: crosshair;
+  }
+  .pad .label {
+    position: absolute; inset: 0; display: grid; place-items: center;
+    color: #3a3a45; font-size: 14px; pointer-events: none; text-align: center; padding: 16px;
+  }
+  .pad.active .label { opacity: 0; }
+  .marker {
+    position: absolute; left: 0; top: 0; width: 22px; height: 22px; margin: -11px 0 0 -11px;
+    border-radius: 50%; background: var(--accent); box-shadow: 0 0 18px var(--accent);
+    pointer-events: none; opacity: 0; transition: opacity .15s;
+    display: grid; place-items: center; font-size: 15px;
+  }
+  .pad.active .marker { opacity: 1; }
+  .pad-tools { display: flex; gap: 8px; justify-content: space-between; align-items: center; color: var(--muted); font-size: 13px; }
+
+  button.ghost {
+    background: var(--panel-2); color: var(--text); border: 1px solid var(--line);
+    border-radius: 10px; padding: 8px 12px; font: inherit; font-size: 13px; cursor: pointer;
+  }
+
+  /* Full-screen pad mode */
+  body.full header, body.full .settings, body.full .pad-tools { display: none; }
+  body.full main { padding: 0; display: block; }
+  body.full .pad {
+    position: fixed; inset: 0; width: 100vw; height: 100dvh; aspect-ratio: auto;
+    border: 0; border-radius: 0;
+  }
+  .exit-full {
+    display: none; position: fixed; top: max(10px, env(safe-area-inset-top)); right: 10px; z-index: 5;
+    opacity: .6;
+  }
+  body.full .exit-full { display: block; }
+
+  .settings {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 14px;
+    padding: 14px; display: flex; flex-direction: column; gap: 16px;
+  }
+  .field > .name { font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin-bottom: 8px; display: flex; justify-content: space-between; }
+  .seg { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+  .seg button {
+    background: var(--panel-2); color: var(--text); border: 1px solid var(--line); border-radius: 10px;
+    padding: 10px 4px; font: inherit; cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 4px;
+  }
+  .seg button span { font-size: 22px; line-height: 1; }
+  .seg button[aria-pressed="true"] { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+  .swatches { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; }
+  .swatches button, .swatches label {
+    aspect-ratio: 1; border-radius: 50%; border: 2px solid transparent; cursor: pointer; padding: 0;
+    position: relative; overflow: hidden;
+  }
+  .swatches button[aria-pressed="true"] { border-color: #fff; }
+  .swatches label {
+    background: conic-gradient(red, yellow, lime, cyan, blue, magenta, red);
+  }
+  .swatches label input { position: absolute; inset: 0; opacity: 0; width: 100%; height: 100%; cursor: pointer; }
+  input[type=range] { width: 100%; accent-color: var(--accent); }
+  .toggle { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 4px 0; }
+  .toggle input { width: 20px; height: 20px; accent-color: var(--accent); }
+  .hint { font-size: 12px; color: var(--muted); margin: 0; }
+  /* Speed: 4-stop snapping slider (thick rail, dot stops, labels under each stop) */
+  .speed { --r: 14px; --p: .333; position: relative; margin-top: 14px; }
+  .speed .track { position: relative; height: 28px; }
+  .speed .rail, .speed .fill {
+    position: absolute; top: 8px; height: 12px; border-radius: 999px; pointer-events: none;
+  }
+  .speed .rail { left: 0; right: 0; background: var(--panel-2); box-shadow: inset 0 0 0 1px var(--line); }
+  .speed .fill {
+    left: 0; width: calc(var(--r) * 2 + (100% - var(--r) * 2) * var(--p));
+    background: var(--accent); transition: width .15s ease;
+  }
+  .speed .dots { position: absolute; left: var(--r); right: var(--r); top: 14px; pointer-events: none; }
+  .speed .dots i {
+    position: absolute; width: 6px; height: 6px; margin: -3px 0 0 -3px; border-radius: 50%;
+    background: var(--muted); opacity: .7;
+  }
+  .speed .dots i.past { background: #fff; opacity: .85; }
+  .speed input {
+    position: relative; z-index: 1; width: 100%; height: 28px; margin: 0; background: transparent;
+    -webkit-appearance: none; appearance: none; cursor: pointer; touch-action: pan-y;
+  }
+  .speed input:focus { outline: none; }
+  .speed input::-webkit-slider-runnable-track { height: 28px; background: transparent; }
+  .speed input::-moz-range-track { height: 28px; background: transparent; }
+  .speed input::-webkit-slider-thumb {
+    -webkit-appearance: none; width: 28px; height: 28px; border-radius: 50%;
+    background: #fff; border: 4px solid var(--accent); box-shadow: 0 2px 10px rgba(0,0,0,.55);
+    transition: transform .1s;
+  }
+  .speed input::-moz-range-thumb {
+    width: 20px; height: 20px; border-radius: 50%;
+    background: #fff; border: 4px solid var(--accent); box-shadow: 0 2px 10px rgba(0,0,0,.55);
+  }
+  .speed input:active::-webkit-slider-thumb { transform: scale(1.12); }
+  .speed input:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 4px rgba(255,255,255,.25); }
+  .speed .labels { position: relative; height: 38px; margin: 6px var(--r) 0; }
+  .speed .labels button {
+    position: absolute; top: 0; transform: translateX(-50%); background: none; border: 0; padding: 2px 4px;
+    color: var(--muted); font: inherit; font-size: 12px; cursor: pointer; white-space: nowrap;
+    display: flex; flex-direction: column; align-items: center; gap: 2px; line-height: 1.1;
+  }
+  .speed .labels button span { font-size: 16px; }
+  .speed .labels button.on { color: var(--text); font-weight: 600; }
+  header .ghost { padding: 6px 10px; }
+  [hidden] { display: none !important; }
+
+</style>
+</head>
+<body>
+<header>
+  <h1><img src="/icons/icon-192.png" alt="" class="logo" onerror="this.remove()">TheCatGame</h1>
+  <div class="status" id="status"><i></i><span>Connecting…</span></div>
+  <button class="ghost" id="shareBtn" hidden title="Share link">Share</button>
+</header>
+
+<main>
+  <section class="pad-wrap">
+    <div class="pad" id="pad">
+      <div class="label" id="padLabel">Drag your finger here, or move your mouse over this area</div>
+      <div class="marker" id="marker"></div>
+    </div>
+    <div class="pad-tools">
+      <span id="padHint">The black box is the projector screen.</span>
+      <button class="ghost" id="fullBtn">⤢ Full screen</button>
+    </div>
+  </section>
+
+  <section class="settings" aria-label="Settings">
+    <div class="field auto-field">
+      <label class="toggle"><span><b>Auto play</b><br><small class="hint">Moves on its own. Touch the pad to take over.</small></span><input type="checkbox" id="auto"></label>
+      <div class="speed" id="speedWrap">
+        <div class="track">
+          <div class="rail"></div>
+          <div class="fill"></div>
+          <div class="dots"><i style="left:0%"></i><i style="left:33.333%"></i><i style="left:66.667%"></i><i style="left:100%"></i></div>
+          <input type="range" id="speed" min="0" max="3" step="1" value="1" aria-label="Auto play speed"
+                 aria-valuetext="Medium">
+        </div>
+        <div class="labels" id="speeds">
+          <button data-level="0" style="left:0%"><span>🐢</span>Slow</button>
+          <button data-level="1" style="left:33.333%"><span>🐭</span>Medium</button>
+          <button data-level="2" style="left:66.667%"><span>🐇</span>Fast</button>
+          <button data-level="3" style="left:100%"><span>⚡</span>Crazy</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="field">
+      <div class="name">Object</div>
+      <div class="seg" id="shapes">
+        <button data-shape="dot"><span>🔴</span>Dot</button>
+        <button data-shape="fish"><span>🐟</span>Fish</button>
+        <button data-shape="bird"><span>🐦</span>Bird</button>
+      </div>
+    </div>
+
+    <div class="field">
+      <div class="name">Color</div>
+      <div class="swatches" id="swatches">
+        <button data-color="#ff2d55" style="background:#ff2d55" aria-label="Red"></button>
+        <button data-color="#30d158" style="background:#30d158" aria-label="Green"></button>
+        <button data-color="#0a84ff" style="background:#0a84ff" aria-label="Blue"></button>
+        <button data-color="#ffd60a" style="background:#ffd60a" aria-label="Yellow"></button>
+        <button data-color="#ffffff" style="background:#ffffff" aria-label="White"></button>
+        <button data-color="#bf5af2" style="background:#bf5af2" aria-label="Purple"></button>
+        <button data-color="#ff9f0a" style="background:#ff9f0a" aria-label="Orange"></button>
+        <button data-color="#64d2ff" style="background:#64d2ff" aria-label="Cyan"></button>
+        <button data-color="#ff6482" style="background:#ff6482" aria-label="Pink"></button>
+        <label aria-label="Custom color"><input type="color" id="customColor" value="#ff2d55"></label>
+      </div>
+    </div>
+
+    <div class="field">
+      <div class="name">Size <span id="sizeVal"></span></div>
+      <input type="range" id="size" min="0.015" max="0.25" step="0.005">
+    </div>
+
+    <div class="field">
+      <div class="name">Smoothing <span id="smoothVal"></span></div>
+      <input type="range" id="smoothing" min="0" max="0.95" step="0.05">
+      <p class="hint">Higher = floatier, more natural motion. 0 = exact tracking.</p>
+    </div>
+
+    <div class="field">
+      <label class="toggle"><span>Glowing trail</span><input type="checkbox" id="trail"></label>
+      <label class="toggle"><span>Hide when finger lifts / mouse leaves</span><input type="checkbox" id="hideOnRelease"></label>
+    </div>
+  </section>
+</main>
+
+<button class="ghost exit-full" id="exitFull">✕ Exit</button>
+
+
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const pad = $('pad'), marker = $('marker'), statusEl = $('status');
+  const ICONS = { dot: '', fish: '🐟', bird: '🐦' };
+  let ws = null, settings = {}, connected = false;
+  let pending = null, rafQueued = false, lastSent = '', lastSendAt = 0;
+
+  // Served by the projector itself (home Wi-Fi) or by thecatgame.pages.dev (anywhere).
+  const isLocal = location.port === '8080' || location.protocol === 'http:';
+  // Over the internet, cap pointer updates; the projector smooths between them.
+  const minSendMs = isLocal ? 0 : 33;
+  // One shared room: everyone on the site controls the same projector.
+  const room = 'HOME';
+  let deviceOnline = isLocal;
+
+  // ---------- connection ----------
+  let retryTimer = null;
+  function connect() {
+    clearTimeout(retryTimer);
+    if (ws) { ws.onclose = null; ws.close(); }
+    const url = isLocal
+      ? `ws://${location.host}/ws`
+      : `wss://${location.host}/ws?role=remote&room=${room}`;
+    const sock = ws = new WebSocket(url);
+    sock.onopen = () => setStatus(true);
+    sock.onclose = () => { if (ws !== sock) return; setStatus(false); retryTimer = setTimeout(connect, 1500); };
+    sock.onerror = () => sock.close();
+    sock.onmessage = (e) => {
+      if (e.data === 'd1' || e.data === 'd0') {
+        deviceOnline = e.data === 'd1';
+        setStatus(true);
+        return;
+      }
+      if (e.data[0] !== 'c') return;
+      deviceOnline = true;
+      const cfg = JSON.parse(e.data.slice(1));
+      settings = cfg.settings;
+      if (cfg.screenW && cfg.screenH) {
+        document.documentElement.style.setProperty('--ar', `${cfg.screenW} / ${cfg.screenH}`);
+        if (!document.body.classList.contains('full')) pad.style.aspectRatio = `${cfg.screenW} / ${cfg.screenH}`;
+      }
+      othersCount = Math.max(0, cfg.clients - 1);
+      setStatus(true);
+      render();
+    };
+  }
+  let othersCount = 0;
+  function setStatus(on) {
+    connected = on;
+    const ok = on && deviceOnline;
+    statusEl.classList.toggle('on', ok);
+    statusEl.querySelector('span').textContent =
+      !on ? 'Reconnecting…'
+      : !deviceOnline ? 'Projector offline'
+      : othersCount > 0 ? `Connected (+${othersCount} other)` : 'Connected';
+  }
+  function send(msg) { if (ws && ws.readyState === 1) ws.send(msg); }
+  function sendSettings(patch) {
+    Object.assign(settings, patch);
+    render();
+    send('s' + JSON.stringify(patch));
+  }
+
+  // ---------- pointer tracking ----------
+  function queuePos(e) {
+    const r = pad.getBoundingClientRect();
+    const x = Math.min(1, Math.max(0, (e.clientX - r.left) / r.width));
+    const y = Math.min(1, Math.max(0, (e.clientY - r.top) / r.height));
+    pending = [x, y];
+    marker.style.transform = `translate(${x * r.width}px, ${y * r.height}px)`;
+    pad.classList.add('active');
+    if (!rafQueued) { rafQueued = true; requestAnimationFrame(flush); }
+  }
+  function flush() {
+    rafQueued = false;
+    if (!pending) return;
+    // Skip if the socket is backed up; the next frame sends the latest position.
+    const now = performance.now();
+    if ((ws && ws.bufferedAmount > 256) || now - lastSendAt < minSendMs) {
+      rafQueued = true; requestAnimationFrame(flush); return;
+    }
+    const msg = `p,${pending[0].toFixed(4)},${pending[1].toFixed(4)}`;
+    pending = null;
+    if (msg !== lastSent) { send(msg); lastSent = msg; lastSendAt = now; }
+  }
+  function release() {
+    pending = null; lastSent = '';
+    pad.classList.remove('active');
+    send('u');
+  }
+
+  let touching = false;
+  pad.addEventListener('pointerdown', (e) => {
+    touching = true;
+    try { pad.setPointerCapture(e.pointerId); } catch (_) {}
+    queuePos(e);
+    e.preventDefault();
+  });
+  pad.addEventListener('pointermove', (e) => {
+    // Mouse/pen: follow on hover. Touch: only while the finger is down.
+    if (e.pointerType === 'mouse' || touching) {
+      const evs = e.getCoalescedEvents ? e.getCoalescedEvents() : [];
+      queuePos(evs.length ? evs[evs.length - 1] : e);
+    }
+  });
+  const end = (e) => {
+    touching = false;
+    if (e.pointerType !== 'mouse') release();
+  };
+  pad.addEventListener('pointerup', end);
+  pad.addEventListener('pointercancel', end);
+  pad.addEventListener('pointerleave', (e) => { if (e.pointerType === 'mouse' && !touching) release(); });
+  pad.addEventListener('contextmenu', (e) => e.preventDefault());
+  // iOS Safari: block page scroll/zoom while dragging on the pad.
+  pad.addEventListener('touchmove', (e) => e.preventDefault(), { passive: false });
+
+  // ---------- settings UI ----------
+  $('shapes').addEventListener('click', (e) => {
+    const b = e.target.closest('button'); if (b) sendSettings({ shape: b.dataset.shape });
+  });
+  $('swatches').addEventListener('click', (e) => {
+    const b = e.target.closest('button'); if (b) sendSettings({ color: b.dataset.color });
+  });
+  $('customColor').addEventListener('input', (e) => sendSettings({ color: e.target.value }));
+  $('size').addEventListener('input', (e) => sendSettings({ size: +e.target.value }));
+  $('smoothing').addEventListener('input', (e) => sendSettings({ smoothing: +e.target.value }));
+  $('trail').addEventListener('change', (e) => sendSettings({ trail: e.target.checked }));
+  $('hideOnRelease').addEventListener('change', (e) => sendSettings({ hideOnRelease: e.target.checked }));
+  $('auto').addEventListener('change', (e) => sendSettings({ auto: e.target.checked }));
+  // Speed slider: four stops (slow, medium, fast, crazy).
+  const LEVELS = { slow: 0, medium: 1, fast: 2, crazy: 3 };
+  const NAMES = ['Slow', 'Medium', 'Fast', 'Crazy'];
+  const toLevel = (v) => Math.round(typeof v === 'number' ? v : (LEVELS[v] ?? 1));
+  $('speed').addEventListener('input', (e) => sendSettings({ auto: true, autoSpeed: +e.target.value }));
+  $('speeds').addEventListener('click', (e) => {
+    const b = e.target.closest('button'); if (b) sendSettings({ auto: true, autoSpeed: +b.dataset.level });
+  });
+
+  function render() {
+    const s = settings;
+    document.querySelectorAll('#shapes button').forEach(b => b.setAttribute('aria-pressed', b.dataset.shape === s.shape));
+    document.querySelectorAll('#swatches button').forEach(b =>
+      b.setAttribute('aria-pressed', b.dataset.color.toLowerCase() === (s.color || '').toLowerCase()));
+    if (s.color) {
+      document.documentElement.style.setProperty('--accent', s.color);
+      $('customColor').value = s.color;
+    }
+    if (s.size != null) { $('size').value = s.size; $('sizeVal').textContent = Math.round(s.size * 1000) / 10 + '%'; }
+    if (s.smoothing != null) { $('smoothing').value = s.smoothing; $('smoothVal').textContent = Math.round(s.smoothing * 100) + '%'; }
+    $('trail').checked = !!s.trail;
+    $('hideOnRelease').checked = !!s.hideOnRelease;
+    $('auto').checked = !!s.auto;
+    document.querySelector('.auto-field').classList.toggle('off', !s.auto);
+    const lvl = Math.max(0, Math.min(3, toLevel(s.autoSpeed)));
+    $('speed').value = lvl;
+    $('speed').setAttribute('aria-valuetext', NAMES[lvl]);
+    $('speedWrap').style.setProperty('--p', lvl / 3);
+    document.querySelectorAll('#speedWrap .dots i').forEach((d, i) => d.classList.toggle('past', i <= lvl));
+    document.querySelectorAll('#speeds button').forEach(b => b.classList.toggle('on', lvl === +b.dataset.level));
+    const icon = ICONS[s.shape] || '';
+    marker.textContent = icon;
+    marker.style.background = icon ? 'transparent' : s.color;
+    marker.style.boxShadow = icon ? 'none' : `0 0 18px ${s.color}`;
+  }
+
+  // ---------- full screen ----------
+  function setFull(on) {
+    document.body.classList.toggle('full', on);
+    const el = document.documentElement;
+    if (on) {
+      pad.style.aspectRatio = '';
+      if (el.requestFullscreen) el.requestFullscreen().catch(() => {});
+      if (screen.orientation && screen.orientation.lock) screen.orientation.lock('landscape').catch(() => {});
+    } else {
+      pad.style.aspectRatio = getComputedStyle(el).getPropertyValue('--ar') || '16 / 9';
+      if (document.fullscreenElement && document.exitFullscreen) document.exitFullscreen().catch(() => {});
+    }
+  }
+  $('fullBtn').addEventListener('click', () => setFull(true));
+  $('exitFull').addEventListener('click', () => setFull(false));
+  document.addEventListener('fullscreenchange', () => { if (!document.fullscreenElement) setFull(false); });
+
+  // ---------- share ----------
+  $('shareBtn').addEventListener('click', async () => {
+    const url = location.origin;
+    try {
+      if (navigator.share) await navigator.share({ title: 'TheCatGame', url });
+      else { await navigator.clipboard.writeText(url); $('shareBtn').textContent = 'Copied!'; setTimeout(() => $('shareBtn').textContent = 'Share', 1500); }
+    } catch (_) {}
+  });
+
+  if (!isLocal) $('shareBtn').hidden = false;
+  if (!isLocal && 'serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => {});
+  connect();
+})();
+</script>
+</body>
+</html>
